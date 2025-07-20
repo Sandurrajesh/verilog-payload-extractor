@@ -1,0 +1,77 @@
+`timescale 1ns/1ps
+
+module packet_extractor_tb;
+
+    // DUT Signals
+    reg clk = 0;
+    reg rst = 1;
+    reg [7:0] data_in;
+    reg fifo_empty;
+    wire fifo_rd_en;
+    wire [7:0] payload_out;
+    wire byte_enable;
+    wire error_premature_end;
+
+    // Clock generation: 10ns period
+    always #5 clk = ~clk;
+
+    // Instantiate DUT
+    packet_extractor uut (
+        .clk(clk),
+        .rst(rst),
+        .fifo_data_in(data_in),
+        .fifo_empty(fifo_empty),
+        .fifo_rd_en(fifo_rd_en),
+        .payload_out(payload_out),
+        .byte_enable(byte_enable),
+        .error_premature_end(error_premature_end)
+    );
+
+    // Simple FIFO memory model
+    reg [7:0] fifo_mem [0:15];
+    integer i = 0;
+
+    initial begin
+        // Sample packet: Header = 00 03 (3-byte payload), Data = AA BB CC
+        fifo_mem[0] = 8'h00;   // MSB of length
+        fifo_mem[1] = 8'h03;   // LSB of length = 3
+        fifo_mem[2] = 8'hAA;
+        fifo_mem[3] = 8'hBB;
+        fifo_mem[4] = 8'hCC;
+
+        #15 rst = 0; // Release reset after 15ns
+
+        $display("Starting simulation...");
+    end
+
+    // Data input and FIFO empty logic
+    always @(posedge clk) begin
+        if (fifo_rd_en && i <= 4) begin
+            data_in <= fifo_mem[i];
+            i <= i + 1;
+        end
+        fifo_empty <= (i > 4);
+    end
+
+    // Timeout and monitor output
+    initial begin
+        #1000;
+        $display("Timeout reached. Ending simulation.");
+        $finish;
+    end
+
+    // Output monitor
+    always @(posedge clk) begin
+        if (byte_enable)
+     
+           $display("Payload Byte Received: %h", payload_out);
+
+        if (error_premature_end)
+            $display("ERROR: Premature packet termination detected at time %t", $time);
+    end
+  initial begin
+    $dumpfile("packet_extractor.vcd");
+    $dumpvars(1,packet_extractor_tb);
+  end
+
+endmodule
